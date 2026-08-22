@@ -3,11 +3,14 @@ package tcpclient
 import (
 	"fmt"
 	"net"
+	"time"
 	// "os"
 )
 
+const DialTimeout = 10 * time.Second
+
 func ConnectToServer(address string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", address)
+	conn, err := net.DialTimeout("tcp", address, DialTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %v", err)
 	}

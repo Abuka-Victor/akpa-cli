@@ -1,0 +1,38 @@
+# .github/workflows/release.yml
+#
+# Fires on any pushed tag matching v*. Builds every platform, generates
+# checksums, and publishes a GitHub Release. No manual step.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write        # required to create the release
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # GoReleaser needs full history for the changelog
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Run tests
+        run: go test ./...
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          # Provided automatically by Actions — you do not create this secret.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
