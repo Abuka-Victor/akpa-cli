@@ -14,7 +14,7 @@ func ConnectToServer(address string) (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %v", err)
 	}
-	fmt.Println("I tried to connect to: " + address)
+	// fmt.Println("I tried to connect to: " + address)
 	return conn, nil
 }
 
