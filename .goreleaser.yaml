@@ -1,0 +1,89 @@
+# GoReleaser v2 — https://goreleaser.com
+#
+#   Dry run:   goreleaser release --snapshot --clean
+#   Real:      git tag v1.0.0 && git push origin v1.0.0   (CI does the rest)
+version: 2
+
+project_name: akpa
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: akpa
+    main: . # main.go sits at the repo root
+    binary: akpa
+    env:
+      - CGO_ENABLED=0 # static binary: no libc dependency, runs anywhere
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    # -s -w strips the symbol table and DWARF info: ~30% smaller binary.
+    # The -X flags stamp build metadata into variables at link time.
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible builds
+
+archives:
+  - id: akpa
+    # This template MUST match what install.sh expects: akpa_linux_amd64.tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+
+release:
+  github:
+    owner: Abuka-Victor
+    name: akpa-cli
+  draft: false
+  prerelease: auto # v1.0.0-rc1 is marked pre-release automatically
+  footer: |
+    ## Install
+
+    ```sh
+    curl -fsSL https://akpa.victorabuka.com/install.sh | bash
+    ```
+
+    Already have akpa? Run `akpa upgrade`.
