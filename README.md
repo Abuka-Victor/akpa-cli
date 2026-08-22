@@ -106,11 +106,13 @@ AKPA_RELAY=akpa.victorabuka.com:7000
 
 ## Updating
 
+Run the install command again:
+
 ```sh
-akpa upgrade
+curl -fsSL https://akpa.victorabuka.com/install.sh | bash
 ```
 
-Re-runs the installer, which fetches the newest release and replaces the binary where it already lives. Silence the startup update check with `AKPA_NO_UPDATE_CHECK=1`.
+It resolves the newest release and replaces your existing binary in place.
 
 ## Uninstalling
 

@@ -86,4 +86,4 @@ release:
     curl -fsSL https://akpa.victorabuka.com/install.sh | bash
     ```
 
-    Already have akpa? Run `akpa upgrade`.
+    Already have akpa? Run the install command again to update.
