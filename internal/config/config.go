@@ -15,7 +15,8 @@ type Config struct {
 	LocalPort  int    // 0 = pick a free port automatically
 	RelayAddr  string // host:port of the akpa relay's control listener
 	NoBanner   bool
-	ForceDL    bool // force downloads instead of rendering in the browser
+	ForceDL    bool   // force downloads instead of rendering in the browser
+	Password   string // empty = no password gate
 	ShowVer    bool
 	ConfigPath string // where config was loaded from, for diagnostics
 }
@@ -29,10 +30,10 @@ const (
 
 // Load resolves configuration from four sources, in increasing priority:
 //
-//	1. built-in defaults
-//	2. config file   (~/.config/akpa/config OR ./.env when it exists)
-//	3. environment   (AKPA_RELAY, AKPA_PORT, …)
-//	4. command-line flags
+//  1. built-in defaults
+//  2. config file   (~/.config/akpa/config OR ./.env when it exists)
+//  3. environment   (AKPA_RELAY, AKPA_PORT, …)
+//  4. command-line flags
 //
 // Later sources win. This ordering is the standard one and it is worth
 // getting right: a user should always be able to override a config file for
@@ -58,6 +59,7 @@ func Load(args []string) (*Config, error) {
 	fs.IntVar(&cfg.LocalPort, "port", cfg.LocalPort, "local port for the file server (0 = auto)")
 	fs.BoolVar(&cfg.NoBanner, "no-banner", cfg.NoBanner, "suppress the startup banner")
 	fs.BoolVar(&cfg.ForceDL, "download", cfg.ForceDL, "force files to download instead of rendering")
+	fs.StringVar(&cfg.Password, "password", cfg.Password, "require this password in the browser (or set AKPA_PASSWORD)")
 	fs.BoolVar(&cfg.ShowVer, "version", false, "print version and exit")
 
 	fs.Usage = func() {
@@ -73,6 +75,7 @@ flags:
 environment:
   AKPA_RELAY       relay address (default %s)
   AKPA_PORT        local port
+  AKPA_PASSWORD    password to require, without putting it in your shell history
   AKPA_NO_BANNER   set to any value to hide the banner
   NO_COLOR         set to any value to disable colored output
 
@@ -83,6 +86,12 @@ examples:
   akpa                                  serve the current directory
   akpa ~/photos                         serve a specific directory
   akpa --relay localhost:8080 .         point at a local relay for development
+  akpa --password hunter2 ~/photos      ask visitors for a password first
+  AKPA_PASSWORD=hunter2 akpa ~/photos   same, but keeps it out of ps and history
+
+note:
+  --password is checked by this process, not by the relay. The relay never
+  sees it and stores nothing.
 `, DefaultRelay)
 	}
 
@@ -138,7 +147,7 @@ func (c *Config) validate() error {
 
 func envMap() map[string]string {
 	m := map[string]string{}
-	for _, k := range []string{"AKPA_RELAY", "AKPA_PORT", "AKPA_NO_BANNER", "AKPA_DOWNLOAD"} {
+	for _, k := range []string{"AKPA_RELAY", "AKPA_PORT", "AKPA_NO_BANNER", "AKPA_DOWNLOAD", "AKPA_PASSWORD"} {
 		if v, ok := os.LookupEnv(k); ok {
 			m[k] = v
 		}
@@ -219,5 +228,8 @@ func applyMap(cfg *Config, m map[string]string) {
 	}
 	if v, ok := m["AKPA_DOWNLOAD"]; ok && v != "" {
 		cfg.ForceDL = true
+	}
+	if v, ok := m["AKPA_PASSWORD"]; ok && v != "" {
+		cfg.Password = v
 	}
 }

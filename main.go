@@ -1,6 +1,7 @@
 package main
 
 import (
+	"akpa/cli/internal/auth"
 	"akpa/cli/internal/banner"
 	"akpa/cli/internal/config"
 	tcpclient "akpa/cli/tcp_client"
@@ -41,7 +42,26 @@ func main() {
 		banner.Print(version)
 	}
 
-	// ---- 2. start the local file server ----------------------------------
+	// ---- 2. build the handler --------------------------------------------
+	// The password gate, if there is one, wraps the file server rather than
+	// living in the tunnel loop. That way it covers every way in — the public
+	// link and http://127.0.0.1 alike — and the proxying code stays unaware
+	// that authentication exists at all.
+	var handler http.Handler = fileHandler(cfg)
+	if cfg.Password != "" {
+		gate, err := auth.New(cfg.Password)
+		if err != nil {
+			banner.Errorf("%v", err)
+			os.Exit(1)
+		}
+		handler = gate.Wrap(handler)
+
+		if len([]rune(cfg.Password)) < 8 {
+			banner.Hint("that password is short; anyone with the link gets unlimited guesses")
+		}
+	}
+
+	// ---- 3. start the local file server ----------------------------------
 	// Listen first, THEN serve. This way we learn the real port before
 	// anything tries to use it, and port 0 means "pick a free one".
 	banner.Step(os.Stderr, "starting file server")
@@ -57,12 +77,12 @@ func main() {
 	banner.Done(os.Stderr, "http://"+localAddr)
 
 	go func() {
-		if err := http.Serve(ln, fileHandler(cfg)); err != nil {
+		if err := http.Serve(ln, handler); err != nil {
 			banner.Errorf("local server stopped: %v", err)
 		}
 	}()
 
-	// ---- 3. connect to the relay -----------------------------------------
+	// ---- 4. connect to the relay -----------------------------------------
 	banner.Step(os.Stderr, "connecting to relay %s", cfg.RelayAddr)
 
 	conn, err := tcpclient.ConnectToServer(cfg.RelayAddr)
@@ -82,7 +102,7 @@ func main() {
 	// one later would discard whatever this one has buffered.
 	reader := bufio.NewReader(conn)
 
-	// ---- 4. handshake ----------------------------------------------------
+	// ---- 5. handshake ----------------------------------------------------
 	banner.Step(os.Stderr, "waiting for tunnel id")
 
 	// Without a deadline this blocks forever if the relay connects but never
@@ -116,9 +136,9 @@ func main() {
 
 	link := fmt.Sprintf("https://akpa.victorabuka.com/live/%s", tunnelID)
 	fmt.Fprintln(os.Stderr)
-	banner.Ready(os.Stderr, cfg.Dir, link)
+	banner.Ready(os.Stderr, cfg.Dir, link, cfg.Password != "")
 
-	// ---- 5. serve tunnel traffic -----------------------------------------
+	// ---- 6. serve tunnel traffic -----------------------------------------
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

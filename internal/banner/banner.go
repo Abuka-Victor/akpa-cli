@@ -113,11 +113,17 @@ func Hint(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "         %s%s%s\n", p.dim, fmt.Sprintf(format, args...), p.reset)
 }
 
-// Ready prints the two lines that actually matter once the tunnel is live.
-func Ready(w io.Writer, dir, link string) {
+// Ready prints the few lines that actually matter once the tunnel is live.
+//
+// The password is never echoed — the user already knows it, and a terminal
+// scrollback is exactly the place it should not end up.
+func Ready(w io.Writer, dir, link string, protected bool) {
 	p := paletteFor(w)
 
 	fmt.Fprintf(w, "  %sserving%s  %s\n", p.dim, p.reset, dir)
+	if protected {
+		fmt.Fprintf(w, "  %slocked%s   password required\n", p.dim, p.reset)
+	}
 	fmt.Fprintf(w, "  %slink%s     %s%s%s%s\n\n", p.dim, p.reset, p.bold, p.accent, link, p.reset)
 	fmt.Fprintf(w, "  %sready. ctrl-c to stop.%s\n\n", p.dim, p.reset)
 }

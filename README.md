@@ -62,6 +62,7 @@ akpa [flags] [directory]
 | --- | --- | --- |
 | `--relay` | `akpa.victorabuka.com:7000` | Relay to connect through |
 | `--port` | `0` | Local file-server port; `0` picks a free one |
+| `--password` | off | Ask visitors for this password before showing anything |
 | `--download` | off | Force files to download instead of rendering in the browser |
 | `--no-banner` | off | Skip the startup banner |
 | `--version` | | Print version and exit |
@@ -71,7 +72,46 @@ akpa                              # serve the current directory
 akpa ~/Downloads                  # serve somewhere else
 akpa --port 5174 ~/photos         # pin the local port
 akpa --relay localhost:8080       # point at a relay running on this machine
+akpa --password correct-horse     # put a password in front of the share
 ```
+
+## Passwords
+
+`--password` puts a login page in front of the share. Visitors see a password
+field, and nothing else, until they get it right.
+
+```sh
+akpa --password correct-horse-battery ~/photos
+```
+
+The check happens **in the CLI process on your machine**. Better than that, the
+password never crosses the network at all: the browser asks akpa for a one-time
+nonce, signs it with the password using WebCrypto, and sends only the signature.
+akpa recomputes the same signature and compares. A proof captured in transit is
+useless — it is bound to a nonce that expires and is retired the moment it works.
+
+This matters because the relay-to-CLI tunnel is plain TCP. Nothing that crosses
+it is encrypted, so the password stays out of it.
+
+On success akpa signs a session cookie with a key it generated at startup and
+kept in memory. Stop the process and every session it issued becomes
+unverifiable, because the key that signed them is gone. Sessions last 12 hours,
+and the gate covers the local `http://127.0.0.1` address too, so there is no way
+in that skips it.
+
+The login page needs JavaScript. The alternative is a form that puts the
+password in the URL, where it lands in history and in every access log along the
+way — worse than requiring a feature every browser already has.
+
+A password on the command line lands in your shell history and in `ps`. To avoid
+both, pass it through the environment instead:
+
+```sh
+AKPA_PASSWORD=correct-horse-battery akpa ~/photos
+```
+
+Wrong guesses are slowed down, but nothing stops a determined visitor with the
+link from trying: pick a password worth typing, not `1234`.
 
 ## Configuration
 
@@ -88,12 +128,14 @@ AKPA_RELAY=akpa.victorabuka.com:7000
 # AKPA_PORT=5174
 # AKPA_NO_BANNER=1
 # AKPA_DOWNLOAD=1
+# AKPA_PASSWORD=fireship-horse-tinder
 ```
 
 | Variable | Effect |
 | --- | --- |
 | `AKPA_RELAY` | Relay address |
 | `AKPA_PORT` | Local port |
+| `AKPA_PASSWORD` | Password to require, without putting it in your shell history |
 | `AKPA_NO_BANNER` | Any value hides the banner |
 | `AKPA_DOWNLOAD` | Any value forces downloads |
 | `AKPA_DEV` | Any value makes akpa also read `./.env` |
@@ -148,8 +190,15 @@ never accepts an inbound connection.
 
 ## Security
 
-- **The link is the credential.** IDs are random and long, but anyone holding the
-  URL gets in. Share it like a password.
+- **The link is the credential**, unless you add one. IDs are random and long,
+  but anyone holding the URL gets in. Share it like a password — or set
+  `--password` so the URL alone is not enough.
+- **Passwords are checked locally.** The relay never receives one — not even in
+  transit — and sessions are signed with a key that exists only inside the
+  running process.
+- **The tunnel itself is not encrypted.** HTTPS ends at the relay; relay to CLI
+  is plain TCP. A password keeps out people holding the link, not someone who
+  can read that hop.
 - **Tunnels are ephemeral.** Stop the process and the link dies. Restarting gives
   you a new ID.
 - **Nothing is stored.** The relay proxies bytes; it does not save your files.
